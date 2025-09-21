@@ -9,6 +9,7 @@ This document provides a comprehensive performance comparison between our CSVC l
 ## 📈 Benchmark Results
 
 ### Single Record Performance
+
 ```
 Scenario: Single CSV record parsing
 Data: "field1,field2,field3,field4,field5\n"
@@ -20,6 +21,7 @@ Result: CSVC is slightly faster (-2.2%) with less memory allocation (-3.9%)
 ```
 
 ### Small Dataset Performance
+
 ```
 Scenario: 100 rows, 5 columns (simple unquoted fields)
 
@@ -30,6 +32,7 @@ Result: Go built-in is 2.8x faster with 55% less memory allocation
 ```
 
 ### Medium Dataset Performance
+
 ```
 Scenario: 1,000 rows, 10 columns (simple unquoted fields)
 
@@ -40,6 +43,7 @@ Result: Go built-in is 3.5x faster with 64% less memory allocation
 ```
 
 ### Escaped Quotes Performance
+
 ```
 Scenario: Single record with escaped quotes
 Data: "field with ""quotes""","another ""quoted"" field",normal\n"
@@ -82,24 +86,28 @@ Result: Go built-in is slightly faster (-15.2%) but CSVC uses less memory (-3.1%
 ## 🔍 Analysis & Insights
 
 ### Where CSVC Excels
+
 1. **Single Record Parsing**: CSVC shows competitive or slightly better performance for individual record parsing
 2. **Memory Efficiency (Small Scale)**: For single records and simple cases, CSVC uses less memory
 3. **Fewer Allocations (Small Scale)**: CSVC tends to make fewer memory allocations for simple scenarios
 
 ### Where Go Built-in Excels
+
 1. **Large Dataset Processing**: Go's built-in package shows significant performance advantages (3-4x faster) for larger datasets
 2. **Memory Efficiency (Large Scale)**: Much better memory usage for processing many records
 3. **Allocation Efficiency**: Dramatically fewer allocations per operation for larger datasets
 
 ### Root Cause Analysis
 
-#### CSVC Implementation Characteristics:
+#### CSVC Implementation Characteristics
+
 - **Character-by-Character Processing**: Our implementation reads one byte at a time, which adds overhead
 - **Individual Field Buffers**: Each field is built using `bytes.Buffer`, creating allocation overhead
 - **Buffered Reader Wrapper**: Additional buffering layer may add overhead
 - **State Machine Approach**: More complex state tracking for each character
 
-#### Go Built-in Optimization:
+#### Go Built-in Optimization
+
 - **Optimized Parsing**: Likely uses more efficient parsing algorithms
 - **Bulk Operations**: Better handling of larger chunks of data
 - **Memory Pooling**: Probably uses memory pooling for better allocation efficiency
@@ -108,12 +116,14 @@ Result: Go built-in is slightly faster (-15.2%) but CSVC uses less memory (-3.1%
 ## 🎯 Recommendations
 
 ### When to Use CSVC
+
 - **Learning/Educational Purposes**: Understanding CSV parsing internals
 - **Custom Requirements**: Need specific parsing behavior not available in standard library
 - **Single Record Processing**: When processing individual CSV records
 - **Embedded Systems**: When you need full control over memory allocation patterns
 
 ### When to Use Go Built-in CSV
+
 - **Production Applications**: For most real-world applications
 - **Large Dataset Processing**: When processing files with many records
 - **Performance-Critical Applications**: When speed is the primary concern
@@ -158,6 +168,7 @@ go test -bench=BenchmarkComparison -benchtime=5s -benchmem
 While our CSVC implementation provides educational value and demonstrates RFC 4180 compliance, Go's built-in `encoding/csv` package is significantly more optimized for production use. The built-in package shows 3-4x better performance for larger datasets and much more efficient memory usage.
 
 Our implementation serves well for:
+
 - Understanding CSV parsing internals
 - Custom parsing requirements
 - Single record processing scenarios
