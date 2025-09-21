@@ -27,3 +27,12 @@ It provide error handling for malformed CSV data.
 - Follow semantic versioning for releases.
 - Use Go modules for dependency management.
 - Ensure compatibility with the latest stable version of Go.
+
+## Links
+- [RFC 4180 Specification](https://tools.ietf.org/html/rfc4180)
+- [Reference C Implementation (libcsv)](https://github.com/rgamble/libcsv)
+- [Go's Built-in CSV Package](https://golang.org/pkg/encoding/csv/)
+- [My GitHub Profile](https://github.com/oleg578)
+
+## License
+This project is licensed under the MIT License.
