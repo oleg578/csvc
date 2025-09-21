@@ -10,7 +10,7 @@ This document provides a comprehensive performance comparison between our CSVC l
 
 ### Single Record Performance
 
-```
+```bash
 Scenario: Single CSV record parsing
 Data: "field1,field2,field3,field4,field5\n"
 
@@ -22,7 +22,7 @@ Result: CSVC is slightly faster (-2.2%) with less memory allocation (-3.9%)
 
 ### Small Dataset Performance
 
-```
+```bash
 Scenario: 100 rows, 5 columns (simple unquoted fields)
 
 BenchmarkComparison_SmallSimple_CSVC-8            20,168     57,972 ns/op   38,992 B/op   1,013 allocs/op
@@ -33,7 +33,7 @@ Result: Go built-in is 2.8x faster with 55% less memory allocation
 
 ### Medium Dataset Performance
 
-```
+```bash
 Scenario: 1,000 rows, 10 columns (simple unquoted fields)
 
 BenchmarkComparison_MediumSimple_CSVC-8           1,003      1,154,024 ns/op   717,643 B/op   16,019 allocs/op
@@ -44,7 +44,7 @@ Result: Go built-in is 3.5x faster with 64% less memory allocation
 
 ### Escaped Quotes Performance
 
-```
+```bash
 Scenario: Single record with escaped quotes
 Data: "field with ""quotes""","another ""quoted"" field",normal\n"
 
