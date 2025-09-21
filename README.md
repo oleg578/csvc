@@ -258,7 +258,7 @@ go test -run TestReader_Read_BasicFields -v
 
 ## 📁 Project Structure
 
-```
+```bash
 csvc/
 ├── csvc.go              # Main library implementation
 ├── csvc_test.go         # Comprehensive test suite
