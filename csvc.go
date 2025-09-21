@@ -5,14 +5,16 @@ import (
 	"io"
 )
 
+// Constants for CSV parsing
 const (
-	ASCII_LF    = 0x0A // '\n'
-	ASCII_CR    = 0x0D // '\r'
-	ASCII_DQ    = 0x22 // '"'
-	ASCII_COMMA = 0x2C // ','
-	ASCII_TAB   = 0x09 // '\t'
+	ASCII_COMMA = ','  // Comma character
+	ASCII_DQ    = '"'  // Double quote character
+	ASCII_LF    = '\n' // Line feed character
+	ASCII_CR    = '\r' // Carriage return character
+	ASCII_TAB   = '\t' // Tab character
 )
 
+// Reader represents a CSV reader
 type Reader struct {
 	Comma byte
 
@@ -24,7 +26,7 @@ func NewReader(r *bufio.Reader) *Reader {
 	return &Reader{
 		Comma:    ',',
 		r:        r,
-		fieldBuf: make([]byte, 0, 256), // initial capacity for field buffer
+		fieldBuf: make([]byte, 0, 256),
 	}
 }
 
