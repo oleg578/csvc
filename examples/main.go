@@ -35,7 +35,7 @@ func main() {
 			break
 		}
 
-		fmt.Printf("Record: %v with %d fields and last field: %v\n", record, len(record), []byte(record[len(record)-1]))
+		fmt.Printf("%d fields:\t%v\n", len(record), record)
 	}
 
 }

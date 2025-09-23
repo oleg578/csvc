@@ -1,5 +1,5 @@
-1,product_1,"some description",1.23,10,2021-01-01 00:00:00
 id,product,description,price,qty,date
+1,product_1,"some description",1.23,10,2021-01-01 00:00:00
 2,product_2,null,2.23,20,2021-01-01 00:00:00
 3,product_3,null,3.23,30,2021-01-01 00:00:00
 4,Fusion Modular Vacuum,null,74.21,879,2010-08-07 02:17:57
