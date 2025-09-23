@@ -12,7 +12,6 @@ const (
 	ASCII_DOUBLE_QUOTE    byte = 0x22 // Double quote character
 	ASCII_LINE_FEED       byte = 0x0A // Line feed character
 	ASCII_CARRIAGE_RETURN byte = 0x0D // Carriage return character
-	ASCII_TAB             byte = 0x09 // Tab character
 )
 
 // Reader represents a CSV reader
@@ -47,7 +46,7 @@ func (b *Reader) Read() (dst []string, err error) {
 	b.starts = b.starts[:0]
 	b.ends = b.ends[:0]
 
-	if err = b.readLine(); err != nil {
+	if err = b.readRecord(); err != nil {
 		return
 	}
 	// Empty line should return one empty field, not EOF
@@ -64,11 +63,7 @@ func (b *Reader) Read() (dst []string, err error) {
 	fieldCount := 0
 
 	// Fast path: no quotes present, split directly from input buffer
-	// Determine effective end to ignore trailing CR if present
 	end := len(b.buf)
-	if end > 0 && b.buf[end-1] == ASCII_CARRIAGE_RETURN {
-		end--
-	}
 	noQuotes := true
 	for i := 0; i < end; i++ {
 		if b.buf[i] == ASCII_DOUBLE_QUOTE {
@@ -127,29 +122,6 @@ func (b *Reader) Read() (dst []string, err error) {
 
 	for i := 0; i < len(b.buf); i++ {
 		ch := b.buf[i]
-
-		// Handle potential stray line-ending characters present in the buffer
-		if ch == ASCII_CARRIAGE_RETURN || ch == ASCII_LINE_FEED {
-			if fieldStart != -1 {
-				if state == STATE_UNQUOTED || state == STATE_QUOTE_IN_QUOTED {
-					// finalize current field before line ending
-					b.starts = append(b.starts, fieldStart)
-					b.ends = append(b.ends, len(b.out))
-					fieldCount++
-					fieldStart = -1
-					state = STATE_START_FIELD
-				}
-			}
-			if lastWasComma {
-				// trailing comma before line end -> empty field
-				pos := len(b.out)
-				b.starts = append(b.starts, pos)
-				b.ends = append(b.ends, pos)
-				fieldCount++
-				lastWasComma = false
-			}
-			continue
-		}
 
 		lastWasComma = false // reset unless we see a comma
 
@@ -269,19 +241,73 @@ func (b *Reader) Read() (dst []string, err error) {
 
 	return b.fields, nil
 }
-func (b *Reader) readLine() (err error) {
+
+// readLine removed in favor of readRecord which supports multi-line quoted fields
+
+// readRecord reads a full CSV record possibly spanning multiple physical lines.
+// It accumulates data until a line terminator is encountered while not inside a quoted field.
+func (b *Reader) readRecord() error {
 	b.buf = b.buf[:0]
+	insideQuoted := false
 	for {
-		line, isPrefix, err := b.r.ReadLine()
-		if err != nil && err.Error() != "EOF" {
-			return err
+		chunk, err := b.r.ReadSlice('\n')
+		if len(chunk) > 0 {
+			prevLen := len(b.buf)
+			b.buf = append(b.buf, chunk...)
+			// Scan from prevLen-1 to catch escaped quote pairs crossing chunk boundary
+			start := prevLen
+			if start > 0 {
+				start = start - 1
+			}
+			for i := start; i < len(b.buf); i++ {
+				c := b.buf[i]
+				if c == ASCII_DOUBLE_QUOTE {
+					if insideQuoted {
+						if i+1 < len(b.buf) && b.buf[i+1] == ASCII_DOUBLE_QUOTE {
+							i++ // skip escaped quote
+						} else {
+							insideQuoted = false
+						}
+					} else {
+						insideQuoted = true
+					}
+				}
+			}
 		}
-		b.buf = append(b.buf, line...)
-		if !isPrefix {
-			return err
+		if err == nil {
+			// Newline encountered; if not inside quoted, record ends here
+			if !insideQuoted {
+				break
+			}
+			// Else continue to accumulate next line
+			continue
 		}
-		if err != nil {
-			return err
+		if err == bufio.ErrBufferFull {
+			// Continue reading next chunk; no newline encountered yet.
+			continue
 		}
+		if err == io.EOF {
+			// EOF
+			if len(b.buf) == 0 {
+				// no data at all
+				return io.EOF
+			}
+			// return partial record as-is (may be unterminated quoted field)
+			break
+		}
+		// Any other error
+		return err
 	}
+	// Trim trailing record delimiter: CRLF, LF, or CR
+	end := len(b.buf)
+	if end > 0 && b.buf[end-1] == ASCII_LINE_FEED {
+		end--
+		if end > 0 && b.buf[end-1] == ASCII_CARRIAGE_RETURN {
+			end--
+		}
+	} else if end > 0 && b.buf[end-1] == ASCII_CARRIAGE_RETURN {
+		end--
+	}
+	b.buf = b.buf[:end]
+	return nil
 }

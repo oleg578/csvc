@@ -2,6 +2,7 @@ package csvc
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -479,6 +480,43 @@ func BenchmarkReader_Read_ComplexFields(b *testing.B) {
 		_, err := reader.Read()
 		if err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+// This test documents the desired behavior for a quoted field larger than 8192 bytes
+// that contains CRLF sequences within the field body. The current implementation reads
+// one physical line at a time and does not yet support records spanning multiple lines
+// due to embedded CRLF within quoted fields. Therefore, this test is skipped for now.
+func TestReader_Read_LargeQuotedFieldWithCRLF(t *testing.T) {
+
+	// Build a large field > 8192 bytes with embedded CRLF sequences
+	var b strings.Builder
+	chunk := strings.Repeat("A", 5000)
+	// total size target ~10KB with CRLF inserted periodically
+	for i := 0; i < 5; i++ {
+		b.WriteString(chunk)
+		b.WriteString("\r\n")
+		b.WriteString(chunk)
+	}
+	largeWithCRLF := b.String()
+
+	// Construct a single CSV record: "<largeWithCRLF>",tail\r\n
+	input := fmt.Sprintf("\"%s\",tail\r\n", largeWithCRLF)
+
+	reader := NewReader(strings.NewReader(input))
+	got, err := reader.Read()
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	want := []string{largeWithCRLF, "tail"}
+	if len(got) != len(want) {
+		t.Fatalf("Read() field count = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("field %d mismatch: got len=%d, want len=%d", i, len(got[i]), len(want[i]))
 		}
 	}
 }
