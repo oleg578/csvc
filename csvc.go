@@ -2,6 +2,7 @@ package csvc
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 )
 
@@ -19,19 +20,33 @@ type Reader struct {
 	Comma      byte
 	FieldCount int // number of fields per record
 	r          *bufio.Reader
-	buf        []byte // buffer to hold data]
+	buf        []byte
+	fields     []string
+	out        []byte
+	starts     []int
+	ends       []int
 }
 
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		Comma: ASCII_COMMA,
-		r:     bufio.NewReaderSize(r, 4096),
-		buf:   make([]byte, 0, 4096), // bytes buffer with capacity of 4096 bytes
+		Comma:  ASCII_COMMA,
+		r:      bufio.NewReaderSize(r, 8192), // Larger buffer for better performance
+		buf:    make([]byte, 0, 8192),
+		fields: make([]string, 0, 32),
+		out:    make([]byte, 0, 2048),
+		starts: make([]int, 0, 32),
+		ends:   make([]int, 0, 32),
 	}
 }
 
 func (b *Reader) Read() (dst []string, err error) {
-	defer func() { b.buf = b.buf[:0] }() // reset buffer after reading
+	// Reset reusable slices but keep capacity
+	b.buf = b.buf[:0]
+	b.fields = b.fields[:0]
+	b.out = b.out[:0]
+	b.starts = b.starts[:0]
+	b.ends = b.ends[:0]
+
 	if err = b.readLine(); err != nil {
 		return
 	}
@@ -41,8 +56,61 @@ func (b *Reader) Read() (dst []string, err error) {
 		return nil, io.EOF
 	}
 
+	// Pre-size output buffer to current line size to reduce reallocations in quoted path
+	if cap(b.out) < len(b.buf) {
+		b.out = make([]byte, 0, len(b.buf))
+	}
+
 	fieldCount := 0
-	field := make([]byte, 0, 256)
+
+	// Fast path: no quotes present, split directly from input buffer
+	// Determine effective end to ignore trailing CR if present
+	end := len(b.buf)
+	if end > 0 && b.buf[end-1] == ASCII_CARRIAGE_RETURN {
+		end--
+	}
+	noQuotes := true
+	for i := 0; i < end; i++ {
+		if b.buf[i] == ASCII_DOUBLE_QUOTE {
+			noQuotes = false
+			break
+		}
+	}
+	if noQuotes {
+		// Collect ranges, build one string, then slice
+		b.starts = b.starts[:0]
+		b.ends = b.ends[:0]
+		start := 0
+		for i := 0; i < end; i++ {
+			if b.buf[i] == b.Comma {
+				b.starts = append(b.starts, start)
+				b.ends = append(b.ends, i)
+				fieldCount++
+				start = i + 1
+			}
+		}
+		// append last field (handles trailing comma as empty)
+		b.starts = append(b.starts, start)
+		b.ends = append(b.ends, end)
+		fieldCount++
+
+		lineStr := string(b.buf[:end])
+		for i := 0; i < len(b.starts); i++ {
+			s, e := b.starts[i], b.ends[i]
+			b.fields = append(b.fields, lineStr[s:e])
+		}
+
+		if b.FieldCount == 0 {
+			b.FieldCount = fieldCount
+		}
+		if fieldCount < b.FieldCount {
+			for i := fieldCount; i < b.FieldCount; i++ {
+				b.fields = append(b.fields, "")
+			}
+		}
+
+		return b.fields, nil
+	}
 
 	// RFC 4180 State Machine for CSV parsing
 	const (
@@ -54,113 +122,166 @@ func (b *Reader) Read() (dst []string, err error) {
 	)
 
 	state := STATE_START_FIELD
+	lastWasComma := false // track if last processed character was a comma
+	fieldStart := -1      // start index in out for the current field
 
 	for i := 0; i < len(b.buf); i++ {
 		ch := b.buf[i]
 
-		// Skip line ending characters that might be included in buffer
+		// Handle potential stray line-ending characters present in the buffer
 		if ch == ASCII_CARRIAGE_RETURN || ch == ASCII_LINE_FEED {
+			if fieldStart != -1 {
+				if state == STATE_UNQUOTED || state == STATE_QUOTE_IN_QUOTED {
+					// finalize current field before line ending
+					b.starts = append(b.starts, fieldStart)
+					b.ends = append(b.ends, len(b.out))
+					fieldCount++
+					fieldStart = -1
+					state = STATE_START_FIELD
+				}
+			}
+			if lastWasComma {
+				// trailing comma before line end -> empty field
+				pos := len(b.out)
+				b.starts = append(b.starts, pos)
+				b.ends = append(b.ends, pos)
+				fieldCount++
+				lastWasComma = false
+			}
 			continue
 		}
+
+		lastWasComma = false // reset unless we see a comma
 
 		switch state {
 		case STATE_START_FIELD:
 			switch ch {
 			case ASCII_DOUBLE_QUOTE:
 				// Start of quoted field
+				fieldStart = len(b.out)
 				state = STATE_QUOTED
 			case b.Comma:
 				// Empty field
-				dst = append(dst, "")
+				pos := len(b.out)
+				b.starts = append(b.starts, pos)
+				b.ends = append(b.ends, pos)
 				fieldCount++
-				field = field[:0] // reset field buffer
+				lastWasComma = true
 				state = STATE_START_FIELD
 			default:
 				// Start of unquoted field
-				field = append(field, ch)
+				fieldStart = len(b.out)
+				b.out = append(b.out, ch)
 				state = STATE_UNQUOTED
 			}
 
 		case STATE_UNQUOTED:
 			if ch == b.Comma {
 				// End of unquoted field
-				dst = append(dst, string(field))
+				b.starts = append(b.starts, fieldStart)
+				b.ends = append(b.ends, len(b.out))
 				fieldCount++
-				field = field[:0] // reset field buffer
+				fieldStart = -1
+				lastWasComma = true
 				state = STATE_START_FIELD
 			} else {
 				// Continue unquoted field
-				field = append(field, ch)
+				b.out = append(b.out, ch)
 			}
 
 		case STATE_QUOTED:
-			if ch == ASCII_DOUBLE_QUOTE {
-				// Potential end of quoted field or escaped quote
-				state = STATE_QUOTE_IN_QUOTED
-			} else {
-				// Continue quoted field (including commas, newlines, etc.)
-				field = append(field, ch)
+			// Jump to next quote to avoid per-byte loop
+			if ch != ASCII_DOUBLE_QUOTE {
+				if idx := bytes.IndexByte(b.buf[i:], ASCII_DOUBLE_QUOTE); idx >= 0 {
+					// copy run up to quote
+					b.out = append(b.out, b.buf[i:i+idx]...)
+					i += idx
+					ch = b.buf[i]
+					// fallthrough to handle quote below
+				} else {
+					// no more quotes: append rest and finish later
+					b.out = append(b.out, b.buf[i:]...)
+					i = len(b.buf) - 1
+					break
+				}
 			}
+			// ch is a quote here
+			state = STATE_QUOTE_IN_QUOTED
 
 		case STATE_QUOTE_IN_QUOTED:
 			switch ch {
 			case ASCII_DOUBLE_QUOTE:
 				// Escaped quote (two consecutive quotes = one quote)
-				field = append(field, ASCII_DOUBLE_QUOTE)
+				b.out = append(b.out, ASCII_DOUBLE_QUOTE)
 				state = STATE_QUOTED
 			case b.Comma:
 				// End of quoted field
-				dst = append(dst, string(field))
+				b.starts = append(b.starts, fieldStart)
+				b.ends = append(b.ends, len(b.out))
 				fieldCount++
-				field = field[:0] // reset field buffer
+				fieldStart = -1 // reset for next field
+				lastWasComma = true
 				state = STATE_START_FIELD
 			default:
-				// This should not happen in valid CSV, but we'll treat it as end of quoted field
-				// and start processing the character as a new field
-				dst = append(dst, string(field))
+				// End quoted field and start a new unquoted field with this character
+				b.starts = append(b.starts, fieldStart)
+				b.ends = append(b.ends, len(b.out))
 				fieldCount++
-				field = field[:0] // reset field buffer
-				field = append(field, ch)
+				fieldStart = len(b.out)
+				b.out = append(b.out, ch)
 				state = STATE_UNQUOTED
 			}
 		}
 	}
 
 	// Handle the last field
-	if state == STATE_QUOTED || state == STATE_QUOTE_IN_QUOTED {
-		// Unterminated quoted field - this is technically an error in RFC 4180
-		// but we'll be lenient and include the field
-		dst = append(dst, string(field))
+	if fieldStart != -1 && (state == STATE_QUOTED || state == STATE_QUOTE_IN_QUOTED || state == STATE_UNQUOTED) {
+		// finalize last field
+		b.starts = append(b.starts, fieldStart)
+		b.ends = append(b.ends, len(b.out))
 		fieldCount++
-	} else if len(field) > 0 || state == STATE_START_FIELD {
-		// Last field or empty field at end
-		dst = append(dst, string(field))
+	} else if lastWasComma {
+		// If line ended with a comma, add empty field
+		pos := len(b.out)
+		b.starts = append(b.starts, pos)
+		b.ends = append(b.ends, pos)
 		fieldCount++
 	}
+
+	// Build final string once and slice for each field
+	if len(b.starts) > 0 {
+		lineStr := string(b.out)
+		for i := 0; i < len(b.starts); i++ {
+			s, e := b.starts[i], b.ends[i]
+			b.fields = append(b.fields, lineStr[s:e])
+		}
+	}
+	// Don't add empty field at end for START_FIELD state unless lastWasComma
+
 	if b.FieldCount == 0 {
 		b.FieldCount = fieldCount
 	}
 	if fieldCount < b.FieldCount {
 		for i := fieldCount; i < b.FieldCount; i++ {
-			dst = append(dst, "")
+			b.fields = append(b.fields, "")
 		}
 	}
-	return
-}
 
-// readLine reads a single line from the CSV input into b.buf.
+	return b.fields, nil
+}
 func (b *Reader) readLine() (err error) {
-	var isPrefix bool
-	line := make([]byte, 0, 4096)
+	b.buf = b.buf[:0]
 	for {
-		line, isPrefix, err = b.r.ReadLine()
+		line, isPrefix, err := b.r.ReadLine()
 		if err != nil && err.Error() != "EOF" {
 			return err
 		}
 		b.buf = append(b.buf, line...)
-		if !isPrefix { // if we have read a complete line
-			break
+		if !isPrefix {
+			return err
+		}
+		if err != nil {
+			return err
 		}
 	}
-	return
 }
