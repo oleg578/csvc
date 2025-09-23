@@ -2,6 +2,10 @@
 
 A high-performance, RFC 4180 compliant CSV parsing library written in Go. This library provides efficient reading and parsing of CSV (Comma-Separated Values) data with support for custom delimiters, quoted fields, and multiline records.
 
+## Method of develeopment
+
+Once the workflow prototype is created, the code and tests are created by Copilot with GPT5 model
+
 ## ✨ Features
 
 - **RFC 4180 Compliant**: Fully compliant with the official CSV standard
