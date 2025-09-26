@@ -10,6 +10,10 @@ A high-performance, RFC 4180 compliant CSV parsing library written in Go. CSVC f
 - Surfaces structured parse errors with line and column numbers (`ParseError`).
 - Provides benchmarks and extensive tests to guard correctness and performance.
 
+## chatGPT Codex
+
+The time it took for the Code to produce the final result was about 45 minutes.
+
 ## API Overview
 
 ### `func NewReader(src *io.Reader) *Reader`
@@ -53,7 +57,7 @@ import (
 func main() {
     var src io.Reader = strings.NewReader("name,price\nWidget,12.50\n")
     reader := csvc.NewReader(&src)
-   
+
     for {
      record, err := reader.Read()
      if err == io.EOF {
