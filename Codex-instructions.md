@@ -9,7 +9,6 @@ CSVReader provides methods for parsing and validating CSV data and return result
 CSVWriter supports writing CSV data to files.
 It provide error handling for malformed CSV data.
 
-
 ## Folder Structure
 
 - `/docs`: Contains the RFC files and design documents.
@@ -29,10 +28,12 @@ It provide error handling for malformed CSV data.
 - Ensure compatibility with the latest stable version of Go.
 
 ## Links
+
 - [RFC 4180 Specification](https://tools.ietf.org/html/rfc4180)
 - [Reference C Implementation (libcsv)](https://github.com/rgamble/libcsv)
 - [Go's Built-in CSV Package](https://golang.org/pkg/encoding/csv/)
 - [My GitHub Profile](https://github.com/oleg578)
 
 ## License
+
 This project is licensed under the MIT License.
