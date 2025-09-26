@@ -10,6 +10,10 @@ import (
 	"csvc"
 )
 
+func newCSVReader(src io.Reader) *csvc.Reader {
+	return csvc.NewReader(&src)
+}
+
 func main() {
 	// Open the CSV file
 	file, err := os.Open("dummy.csv")
@@ -23,7 +27,7 @@ func main() {
 	bufReader := bufio.NewReader(file)
 
 	// Create a CSV reader
-	csvReader := csvc.NewReader(bufReader)
+	csvReader := newCSVReader(bufReader)
 
 	// Read the header row
 	fmt.Println("=== CSV Reader Example ===")
@@ -73,7 +77,7 @@ func main() {
 	// Reset file pointer to read from beginning again
 	file.Seek(0, 0)
 	bufReader = bufio.NewReader(file)
-	csvReader = csvc.NewReader(bufReader)
+	csvReader = newCSVReader(bufReader)
 
 	// Skip header
 	csvReader.Read()
@@ -114,7 +118,7 @@ func main() {
 
 	// Create reader from string
 	stringReader := bufio.NewReader(strings.NewReader(testData))
-	semicolonReader := csvc.NewReader(stringReader)
+	semicolonReader := newCSVReader(stringReader)
 	semicolonReader.Comma = ';' // Set custom delimiter
 
 	fmt.Println("Reading semicolon-delimited data:")
