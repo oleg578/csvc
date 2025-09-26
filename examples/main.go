@@ -11,14 +11,12 @@ import (
 )
 
 func newCSVReader(src io.Reader) *csvc.Reader {
-	return csvc.NewReader(&src)
+	return csvc.NewReader(src)
 }
-
 func main() {
 	// Open the CSV file
 	file, err := os.Open("dummy.csv")
 	if err != nil {
-		fmt.Printf("Error opening file: %v\n", err)
 		return
 	}
 	defer file.Close()
